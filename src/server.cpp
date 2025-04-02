@@ -88,6 +88,14 @@ int main(int argc, char **argv) {
 
   if (req.path == "/") {
     response = "HTTP/1.1 200 OK\r\n\r\n";
+  } else if (req.path.substr(1, req.path.substr(1).find('/')) == "echo") {
+
+    // Extract the string to echo from the path
+    std::string echo_string = req.path.substr(req.path.substr(1).find('/') + 2);
+
+    char buffer[1024];
+    sprintf(buffer, "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length:%zu\r\n\r\n%s", echo_string.length(), echo_string.c_str());
+    response = buffer;
   }
   
   send(client, response.c_str(), response.length(), 0);
