@@ -8,6 +8,12 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
+struct request {
+  std::string method;
+  std::string path;
+  std::string version;
+};
+
 int main(int argc, char **argv) {
   // Flush after every std::cout / std::cerr
   std::cout << std::unitbuf;
@@ -57,8 +63,33 @@ int main(int argc, char **argv) {
     std::cerr << "Failed to accept client connection\n";
     return 1;
   }
+  
+  char buffer[1024];
+  ssize_t bytes_received = recv(client, buffer, sizeof(buffer) - 1, 0);
+  if (bytes_received < 0) {
+    std::cerr << "Failed to receive data from client\n";
+    close(client);
+    return 1;
+  }
+  buffer[bytes_received] = '\0'; // Null-terminate the received data
+  std::cout << "Received data from client:\n" << buffer << "\n";
 
-  std::string response = "HTTP/1.1 200 OK\r\n\r\n";
+  request req;
+
+  std::string str(buffer);
+  size_t pos = str.find('\r\n');
+  std::string req_data = str.substr(0, pos);
+
+  req.method = req_data.substr(0, req_data.find(' '));
+  req.path = req_data.substr(req_data.find(' ') + 1, req_data.rfind(' ') - req_data.find(' ') - 1);
+  req.version = req_data.substr(req_data.rfind(' ') + 1);
+
+  std::string response = "HTTP/1.1 404 Not Found\r\n\r\n";
+
+  if (req.path == "/") {
+    response = "HTTP/1.1 200 OK\r\n\r\n";
+  }
+  
   send(client, response.c_str(), response.length(), 0);
   
   close(server_fd);
