@@ -94,7 +94,7 @@ int main(int argc, char **argv) {
     std::string echo_string = req.path.substr(req.path.substr(1).find('/') + 2);
 
     char buffer[1024];
-    sprintf(buffer, "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length:%zu\r\n\r\n%s", echo_string.length(), echo_string.c_str());
+    sprintf(buffer, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length:%zu\r\n\r\n%s", echo_string.length(), echo_string.c_str());
     response = buffer;
   }
   
