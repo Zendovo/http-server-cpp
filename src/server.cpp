@@ -116,7 +116,6 @@ void handle_request(int client)
   std::string response = get_response(req);
 
   send(client, response.c_str(), response.length(), 0);
-  delete[] buffer;
 }
 
 void extract_request(char *buffer, request_t &req)
