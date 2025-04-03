@@ -8,6 +8,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <thread>
+#include <fstream>
 #include "settings.hpp"
 
 struct headers_t
@@ -24,6 +25,7 @@ struct request_t
   std::string method;
   std::string path;
   std::string version;
+  std::string body;
   headers_t headers;
 };
 
@@ -154,6 +156,8 @@ void extract_request(char *buffer, request_t &req)
     req.path = "/";
     req.version = "HTTP/1.1";
   }
+
+  // Headers
   req.headers = req_header;
 
   size_t user_agent_pos = header_data.find("User-Agent");
@@ -166,6 +170,11 @@ void extract_request(char *buffer, request_t &req)
   {
     req.headers.user_agent = "";
   }
+
+  // Request Body
+  size_t l_pos = str.rfind("\r\n");
+  std::string body = str.substr(l_pos + 2);
+  req.body = body;
 }
 
 std::string get_response(request_t &req)
@@ -195,29 +204,32 @@ std::string get_response(request_t &req)
     }
     else if (req.path.substr(1, req.path.substr(1).find('/')) == "files")
     {
-      std::string file_path = settings.directory + req.path.substr(req.path.find('/') + 7);
-      FILE *file = fopen(file_path.c_str(), "r");
-      if (file)
+      if (req.method == "GET")
       {
-        fseek(file, 0, SEEK_END);
-        long file_size = ftell(file);
-        fseek(file, 0, SEEK_SET);
+        std::ifstream i_file(settings.directory + req.path.substr(req.path.find('/') + 7), std::ios::binary | std::ios::ate);
+        if (!i_file)
+        {
+          response = "HTTP/1.1 404 Not Found\r\n\r\n";
+          return response;
+        }
+        long file_size = i_file.tellg();
+        i_file.seekg(0, std::ios::beg);
 
-        char *file_buffer = new char[file_size + 1];
-        fread(file_buffer, 1, file_size, file);
-        fclose(file);
-        file_buffer[file_size] = '\0';
+        std::string file_data(file_size, '\0');
+        i_file.read(&file_data[0], file_size);
 
         char buffer[file_size + 128];
 
-        sprintf(buffer, "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length:%zu\r\n\r\n%s", file_size, file_buffer);
+        sprintf(buffer, "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length:%zu\r\n\r\n%s", file_size, file_data.c_str());
         response = buffer;
-
-        delete[] file_buffer;
       }
-      else
+      else if (req.method == "POST")
       {
-        response = "HTTP/1.1 404 Not Found\r\n\r\n";
+        std::ofstream o_file(settings.directory + req.path.substr(req.path.find('/') + 7));
+        o_file << req.body;
+        o_file.close();
+
+        response = "HTTP/1.1 201 Created\r\n\r\n";
       }
     }
 
