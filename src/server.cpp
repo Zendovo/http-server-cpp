@@ -27,7 +27,7 @@ struct request_t
 };
 
 std::string get_response(request_t &req);
-void handle_request(int client, char *buffer);
+void handle_request(int client);
 void extract_request(char *buffer, request_t &req);
 
 int main(int argc, char **argv)
@@ -89,20 +89,7 @@ int main(int argc, char **argv)
       return 1;
     }
 
-    // Store the received data in a buffer
-    char buffer[1024];
-    ssize_t bytes_received = recv(client, buffer, sizeof(buffer) - 1, 0);
-    if (bytes_received < 0)
-    {
-      std::cerr << "Failed to receive data from client\n";
-      close(client);
-      return 1;
-    }
-    buffer[bytes_received] = '\0';
-    std::cout << "Received data from client:\n"
-              << buffer << "\n";
-
-    std::thread th = std::thread(handle_request, client, buffer);
+    std::thread th(handle_request, client);
     th.detach();
   }
 
@@ -111,17 +98,25 @@ int main(int argc, char **argv)
   return 0;
 }
 
-void handle_request(int client, char *buffer)
+void handle_request(int client)
 {
-  char *buffer_copy = new char[1024];
-  std::strcpy(buffer_copy, buffer);
+  char buffer[1024];
+  ssize_t bytes_received = recv(client, buffer, sizeof(buffer) - 1, 0);
+  if (bytes_received < 0)
+  {
+    std::cerr << "Failed to receive data from client\n";
+    close(client);
+    return;
+  }
+  buffer[bytes_received] = '\0';
+
   request_t req;
-  extract_request(buffer_copy, req);
+  extract_request(buffer, req);
 
   std::string response = get_response(req);
 
   send(client, response.c_str(), response.length(), 0);
-  delete[] buffer_copy;
+  delete[] buffer;
 }
 
 void extract_request(char *buffer, request_t &req)
