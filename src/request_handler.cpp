@@ -18,15 +18,17 @@ void Router::addRoute(const std::string &path, std::function<void(request_t &, r
     routes[path] = handler;
 }
 
+void Router::addPostProcessor(std::function<void(request_t &, response_t &)> post_processor)
+{
+    post_processors.push_back(post_processor);
+}
+
 std::string Router::getResponse(request_t &request)
 {
     response_t response = handleRequest(request);
-    if (request.headers.find("Accept-Encoding") != response.headers.end())
+    for (auto &post_processor : post_processors)
     {
-        if (request.headers["Accept-Encoding"].find("gzip") != std::string::npos)
-        {
-            response.headers["Content-Encoding"] = "gzip";
-        }
+        post_processor(request, response);
     }
     return buildResponseString(response);
 }

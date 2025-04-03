@@ -1,38 +1,57 @@
-[![progress-banner](https://backend.codecrafters.io/progress/http-server/574ac354-1469-44a0-8ab4-d3f04e3b57d1)](https://app.codecrafters.io/users/codecrafters-bot?r=2qF)
+# Codecrafters HTTP Server (C++)
 
-This is a starting point for C++ solutions to the
-["Build Your Own HTTP server" Challenge](https://app.codecrafters.io/courses/http-server/overview).
+This project is a custom HTTP server implemented in C++. Below is an overview of the program's structure and key components, including the router, threading for concurrent requests, GZIP implementation, and post-processors.
 
-[HTTP](https://en.wikipedia.org/wiki/Hypertext_Transfer_Protocol) is the
-protocol that powers the web. In this challenge, you'll build a HTTP/1.1 server
-that is capable of serving multiple clients.
+## Project Structure
 
-Along the way you'll learn about TCP servers,
-[HTTP request syntax](https://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html),
-and more.
-
-**Note**: If you're viewing this repo on GitHub, head over to
-[codecrafters.io](https://codecrafters.io) to try the challenge.
-
-# Passing the first stage
-
-The entry point for your HTTP server implementation is in `src/server.cpp`.
-Study and uncomment the relevant code, and push your changes to pass the first
-stage:
-
-```sh
-git commit -am "pass 1st stage" # any msg
-git push origin master
+```
+codecrafters-http-server-cpp/
+├── src/
+│   ├── request_handler.cpp         # Router implementation
+│   ├── server.cpp                  # Core server logic
+│   ├── settings.cpp                # For flags
+│   └── routes
+│     └── register.cpp              # Routes and Postprocessors
+└── README.md                       # Project documentation
 ```
 
-Time to move on to the next stage!
+## Router Implementation
 
-# Stage 2 & beyond
+The router is responsible for mapping HTTP requests to specific handlers based on the request's method and path. It uses a map to store routes and their corresponding handler functions. The router supports dynamic route parameters (e.g., `/users/:id`) and resolves them at runtime.
 
-Note: This section is for stages 2 and beyond.
+### Key Features:
+- **Route Registration**: Routes are registered with their HTTP method and path.
+- **Dynamic Parameters**: Extracts parameters from the URL and passes them to the handler.
 
-1. Ensure you have `cmake` installed locally
-1. Run `./your_program.sh` to run your program, which is implemented in
-   `src/server.cpp`.
-1. Commit your changes and run `git push origin master` to submit your solution
-   to CodeCrafters. Test output will be streamed to your terminal.
+### Example:
+```cpp
+router.addRoute("GET", "/users/:id", [](request_t &req, response_t &res) {
+   res.body = "User ID: " + req.params["id"];
+});
+```
+
+## Threading for Concurrent Requests
+
+The server uses threads to handle multiple client requests concurrently.
+
+## GZIP Implementation
+
+The server supports GZIP compression to reduce the size of HTTP responses. The `register.cpp` file registers a compression post-processor to compress response data using the zlib library.
+
+### Key Features:
+- **Compression on Demand**: Responses are compressed if the client supports GZIP (via the `Accept-Encoding` header).
+- **Efficient Compression**: Uses zlib's deflate algorithm for optimal performance.
+- **Transparent Integration**: Compression is applied automatically in the response pipeline.
+
+## Post-Processors
+
+Post-processors are middleware functions that modify the response before it is sent to the client. They can be used for tasks like logging, adding headers, or transforming response data.
+
+### Key Features:
+- **Chaining**: Multiple post-processors can be applied in sequence.
+- **Custom Logic**: Developers can define custom post-processors for specific use cases.
+- **Integration**: Post-processors are invoked after the main handler generates the response.
+
+## Conclusion
+
+This HTTP server demonstrates a modular and efficient design, supporting routing, concurrency, compression, and response post-processing. Each component is designed to be reusable and extensible, making it a robust foundation for building web applications.

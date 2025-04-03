@@ -78,6 +78,7 @@ int main(int argc, char **argv)
 
   Router &router = Router::getInstance();
   registerRoutes(router);
+  registerPostProcessors(router);
 
   while (1)
   {

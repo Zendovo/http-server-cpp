@@ -29,6 +29,7 @@ class Router
 {
 private:
     std::map<std::string, std::function<void(request_t &, response_t &)>> routes;
+    std::vector<std::function<void(request_t &, response_t &)>> post_processors;
 
     Router();
 
@@ -37,6 +38,7 @@ public:
 
 public:
     void addRoute(const std::string &path, std::function<void(request_t &, response_t &)> handler);
+    void addPostProcessor(std::function<void(request_t &, response_t &)> post_processor);
 
     std::string getResponse(request_t &request);
 
