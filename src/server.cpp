@@ -8,6 +8,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <thread>
+#include "settings.hpp"
 
 struct headers_t
 {
@@ -30,8 +31,18 @@ std::string get_response(request_t &req);
 void handle_request(int client);
 void extract_request(char *buffer, request_t &req);
 
+MySettings settings;
+
 int main(int argc, char **argv)
 {
+  // Parse command line arguments
+  settings = parse_settings(argc, argv);
+  if (settings.verbose)
+  {
+    std::cout << "Verbose mode is enabled.\n";
+    std::cout << "Directory: " << settings.directory << "\n";
+  }
+
   // Flush after every std::cout / std::cerr
   std::cout << std::unitbuf;
   std::cerr << std::unitbuf;
@@ -181,6 +192,33 @@ std::string get_response(request_t &req)
       char buffer[1024];
       sprintf(buffer, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length:%zu\r\n\r\n%s", req.headers.user_agent.length(), req.headers.user_agent.c_str());
       response = buffer;
+    }
+    else if (req.path.substr(1, req.path.substr(1).find('/')) == "files")
+    {
+      std::string file_path = settings.directory + req.path.substr(req.path.find('/') + 7);
+      FILE *file = fopen(file_path.c_str(), "r");
+      if (file)
+      {
+        fseek(file, 0, SEEK_END);
+        long file_size = ftell(file);
+        fseek(file, 0, SEEK_SET);
+
+        char *file_buffer = new char[file_size + 1];
+        fread(file_buffer, 1, file_size, file);
+        fclose(file);
+        file_buffer[file_size] = '\0';
+
+        char buffer[file_size + 128];
+
+        sprintf(buffer, "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length:%zu\r\n\r\n%s", file_size, file_buffer);
+        response = buffer;
+
+        delete[] file_buffer;
+      }
+      else
+      {
+        response = "HTTP/1.1 404 Not Found\r\n\r\n";
+      }
     }
 
     return response;
