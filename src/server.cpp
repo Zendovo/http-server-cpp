@@ -9,29 +9,14 @@
 #include <netdb.h>
 #include <thread>
 #include <fstream>
+#include <sstream>
 #include "settings.hpp"
+#include "request_handler.hpp"
+#include "routes/register.hpp"
 
-struct headers_t
-{
-  std::string user_agent;
-  std::string accept;
-  std::string host;
-  std::string content_type;
-  uint16_t content_length;
-};
-
-struct request_t
-{
-  std::string method;
-  std::string path;
-  std::string version;
-  std::string body;
-  headers_t headers;
-};
-
-std::string get_response(request_t &req);
-void handle_request(int client);
-void extract_request(char *buffer, request_t &req);
+void handleRequest(int client, Router &router);
+void extractRequest(char *buffer, request_t &req);
+headers_t extractHeaders(const std::string request);
 
 MySettings settings;
 
@@ -91,6 +76,9 @@ int main(int argc, char **argv)
 
   std::cout << "Waiting for a client to connect...\n";
 
+  Router &router = Router::getInstance();
+  registerRoutes(router);
+
   while (1)
   {
     // Accept a new client connection
@@ -102,7 +90,7 @@ int main(int argc, char **argv)
       return 1;
     }
 
-    std::thread th(handle_request, client);
+    std::thread th(handleRequest, client, std::ref(router));
     th.detach();
   }
 
@@ -111,7 +99,7 @@ int main(int argc, char **argv)
   return 0;
 }
 
-void handle_request(int client)
+void handleRequest(int client, Router &router)
 {
   char buffer[1024];
   ssize_t bytes_received = recv(client, buffer, sizeof(buffer) - 1, 0);
@@ -124,14 +112,14 @@ void handle_request(int client)
   buffer[bytes_received] = '\0';
 
   request_t req;
-  extract_request(buffer, req);
+  extractRequest(buffer, req);
 
-  std::string response = get_response(req);
+  std::string response = router.getResponse(req);
 
   send(client, response.c_str(), response.length(), 0);
 }
 
-void extract_request(char *buffer, request_t &req)
+void extractRequest(char *buffer, request_t &req)
 {
   headers_t req_header;
 
@@ -143,8 +131,10 @@ void extract_request(char *buffer, request_t &req)
   size_t first_space = req_data.find(' ');
   size_t last_space = req_data.rfind(' ');
 
+  // Request Method
   req.method = req_data.substr(0, first_space);
 
+  // Request Path and Version
   if (first_space != std::string::npos && last_space != std::string::npos && first_space != last_space)
   {
     req.path = req_data.substr(first_space + 1, last_space - first_space - 1);
@@ -158,18 +148,7 @@ void extract_request(char *buffer, request_t &req)
   }
 
   // Headers
-  req.headers = req_header;
-
-  size_t user_agent_pos = header_data.find("User-Agent");
-  if (user_agent_pos != std::string::npos)
-  {
-    req.headers.user_agent = header_data.substr(user_agent_pos + 12);
-    req.headers.user_agent = req.headers.user_agent.substr(0, req.headers.user_agent.find('\r'));
-  }
-  else
-  {
-    req.headers.user_agent = "";
-  }
+  req.headers = extractHeaders(str);
 
   // Request Body
   size_t l_pos = str.rfind("\r\n");
@@ -177,67 +156,22 @@ void extract_request(char *buffer, request_t &req)
   req.body = body;
 }
 
-std::string get_response(request_t &req)
+headers_t extractHeaders(const std::string request)
 {
-  try
+  headers_t headers;
+  std::istringstream stream(request);
+  std::string line;
+
+  while (std::getline(stream, line) && line != "\r")
   {
-    std::string response = "HTTP/1.1 404 Not Found\r\n\r\n";
-
-    if (req.path == "/")
+    size_t pos = line.find(": ");
+    if (pos != std::string::npos)
     {
-      response = "HTTP/1.1 200 OK\r\n\r\n";
+      std::string key = line.substr(0, pos);
+      std::string value = line.substr(pos + 2);
+      headers[key] = value;
     }
-    else if (req.path.substr(1, req.path.substr(1).find('/')) == "echo")
-    {
-      // Extract the string to echo from the path
-      std::string echo_string = req.path.substr(req.path.substr(1).find('/') + 2);
-
-      char buffer[1024];
-      sprintf(buffer, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length:%zu\r\n\r\n%s", echo_string.length(), echo_string.c_str());
-      response = buffer;
-    }
-    else if (req.path.substr(1, req.path.substr(1).find('/')) == "user-agent")
-    {
-      char buffer[1024];
-      sprintf(buffer, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length:%zu\r\n\r\n%s", req.headers.user_agent.length(), req.headers.user_agent.c_str());
-      response = buffer;
-    }
-    else if (req.path.substr(1, req.path.substr(1).find('/')) == "files")
-    {
-      if (req.method == "GET")
-      {
-        std::ifstream i_file(settings.directory + req.path.substr(req.path.find('/') + 7), std::ios::binary | std::ios::ate);
-        if (!i_file)
-        {
-          response = "HTTP/1.1 404 Not Found\r\n\r\n";
-          return response;
-        }
-        long file_size = i_file.tellg();
-        i_file.seekg(0, std::ios::beg);
-
-        std::string file_data(file_size, '\0');
-        i_file.read(&file_data[0], file_size);
-
-        char buffer[file_size + 128];
-
-        sprintf(buffer, "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length:%zu\r\n\r\n%s", file_size, file_data.c_str());
-        response = buffer;
-      }
-      else if (req.method == "POST")
-      {
-        std::ofstream o_file(settings.directory + req.path.substr(req.path.find('/') + 7));
-        o_file << req.body;
-        o_file.close();
-
-        response = "HTTP/1.1 201 Created\r\n\r\n";
-      }
-    }
-
-    return response;
   }
-  catch (const std::exception &e)
-  {
-    std::cerr << e.what() << '\n';
-    return "HTTP/1.1 500 Internal Server Error\r\n\r\n";
-  }
+
+  return headers;
 }
